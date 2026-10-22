@@ -1,4 +1,10 @@
 /config.php
 /public/uploads/*
 !/public/uploads/.gitkeep
+.env
+.env.*
+!.env.example
+.local/
+*.log
+.phpunit.result.cache
 .DS_Store
