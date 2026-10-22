@@ -1,88 +1,268 @@
-# WebShelf
+<div align="center">
 
-Ứng dụng PHP + MySQL lưu lại nội dung các trang HTML công khai để đọc khi trang gốc đổi/mất. Mỗi lần lấy tạo một phiên bản (snapshot) bất biến; tìm kiếm, ghi chú và xuất đều gắn với đúng phiên bản đó.
+# WebArchive Reader
 
-## Chức năng
+### Lưu trang web · Đọc offline · Tìm đúng snapshot
 
-- Thư viện có thành viên và vai trò `owner`, `editor`, `viewer`.
-- Chỉ lấy URL HTTP(S) thuộc danh sách host cho phép; kiểm tra mọi chuyển hướng.
-- Tách `article`, `main` hoặc `.article-content`; từ chối 404, HTML rỗng, thông báo lỗi và timeout.
-- Làm sạch HTML (không script, event handler, iframe, stylesheet/URL ngoài); tải ảnh HTTP(S) hợp lệ về cục bộ.
-- Đọc snapshot cũ, làm mới tạo snapshot mới, tìm kiếm title/nội dung, nhãn, ghi chú, xuất JSON hoặc Markdown.
-- Có 15 trang mẫu và 10 truy vấn kiểm thử; test case chi tiết nằm trong [docs/TEST-CASES.md](docs/TEST-CASES.md).
+Ứng dụng PHP + MySQL giúp lưu nội dung HTML công khai thành các snapshot bất biến,
+đọc lại khi trang gốc thay đổi hoặc ngừng hoạt động, tìm kiếm trong nội dung đã lưu
+và quản lý quyền truy cập theo thư viện.
 
-## Yêu cầu
+<p>
+  <img src="https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white" alt="PHP 8.1+">
+  <img src="https://img.shields.io/badge/MySQL%20%2F%20MariaDB-utf8mb4-4479A1?logo=mysql&logoColor=white" alt="MySQL or MariaDB">
+  <img src="https://img.shields.io/badge/Frontend-HTML%20%2B%20CSS-1572B6?logo=html5&logoColor=white" alt="HTML and CSS">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
+</p>
 
-- PHP 8.1+ với `pdo_mysql`, `curl`, `dom`, `mbstring`
-- MySQL 8+ (hoặc MariaDB 10.5+)
+</div>
 
-## Cài đặt nhanh
+## ✨ Điểm nổi bật
 
-1. Tạo CSDL và nạp lược đồ/dữ liệu:
+| 📚 Thư viện | 🌐 Fetch an toàn | 🧹 Reader sạch | 🔎 Tìm kiếm | 🕘 Lịch sử |
+| --- | --- | --- | --- | --- |
+| Owner/editor/viewer, thư viện riêng và chia sẻ | Kiểm tra URL, IP, port và redirect | Loại script, event handler, iframe và form | Tìm title + toàn bộ thân bài | Mỗi lần refresh tạo version mới |
 
-   ```bash
-   mysql -u root -p -e "CREATE DATABASE webshelf CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-   mysql -u root -p webshelf < database/schema.sql
-   mysql -u root -p webshelf < database/seed.sql
-   ```
+- **Offline reader:** nội dung và ảnh đã cam kết lưu không phụ thuộc website nguồn khi mở lại.
+- **Snapshot bất biến:** v1, v2, ... được giữ nguyên; ghi chú gắn với đúng phiên bản.
+- **Phân quyền backend:** page, snapshot, asset, note và export đều kiểm tra membership.
+- **Dữ liệu mẫu local:** 15+ fixture và 10 truy vấn kiểm thử, không phụ thuộc Internet.
+- **Không framework lớn:** PHP thuần, PDO prepared statements, DOMDocument và cURL.
 
-2. Sao chép cấu hình và điền thông tin CSDL (không commit file này):
+> **Phạm vi:** chỉ hỗ trợ HTML tĩnh công khai thuộc host đã được cho phép. Đây không phải
+> công cụ tìm kiếm toàn Internet, không vượt đăng nhập/paywall và không tải JavaScript,
+> CSS, video hoặc tài nguyên ngoài danh sách hỗ trợ.
 
-   ```bash
-   cp config.example.php config.php
-   ```
+## 🧭 Luồng hoạt động
 
-   `config.example.php` chỉ cho phép host/cổng đã khai báo. Với website công khai,
-   đặt `allow_private_hosts` thành `false`; giá trị `true` trong cấu hình mẫu local
-   chỉ phục vụ máy chủ fixture trên `localhost`.
-
-3. Kiểm tra extension trước khi chạy:
-
-   ```bash
-   php -m | grep -E 'pdo_mysql|curl|dom|mbstring'
-   ```
-
-4. Chạy **hai** máy chủ terminal riêng:
-
-   ```bash
-   php -S localhost:8081 -t samples/site
-   php -S localhost:8080 -t public
-   ```
-
-5. Mở `http://localhost:8080`. Đăng nhập bằng bộ chọn demo: Alice (owner/editor) hoặc Bob (viewer).
-
-## Hai luồng demo
-
-### 1. Lưu, đọc và tìm
-
-Chọn Alice → mở “Lưu URL” → nhập `http://localhost:8081/article-01.html` → gắn nhãn → mở snapshot → tìm `từ khóa thân bài`. Kết quả hiển thị đoạn trích và liên kết tới snapshot đúng phiên bản.
-
-### 2. Trang gốc thay đổi/mất
-
-Lưu `article-02.html`, mở terminal máy chủ mẫu và sửa hoặc dừng nó. Snapshot cũ vẫn đọc được, gồm ảnh cục bộ. Bật lại máy chủ, chọn “Lấy bản mới” để tạo snapshot mới; ghi chú ở bản cũ vẫn còn. Xuất JSON chỉ được cho thành viên thư viện.
-
-## Kiểm thử bắt buộc
-
-Các URL mẫu và kết quả mong đợi nằm trong [samples/QUERIES.md](samples/QUERIES.md). Các trường hợp `404.html`, `empty.html`, `script.html` và `redirect-outside.php` kiểm tra lỗi/khóa truy cập. Với `script.html`, snapshot hợp lệ nhưng đoạn script không bao giờ được đưa vào HTML đã lưu.
-
-## Cấu trúc
-
-```
-public/        giao diện và router HTTP
-src/           xử lý đăng nhập demo, quyền, fetch/làm sạch/lưu trữ
-database/      schema và dữ liệu giả
-samples/site/  trang nguồn tĩnh phục vụ demo
+```mermaid
+flowchart LR
+    A[URL input] --> B[Validate URL]
+    B --> C[Validate DNS/IP/port]
+    C --> D[Fetch HTTP]
+    D --> E[Validate redirect/response]
+    E --> F[Extract article]
+    F --> G[Sanitize HTML]
+    G --> H[Download supported images]
+    H --> I[(Persist snapshot)]
+    I --> J[Offline reader/search/export]
 ```
 
-## Giới hạn chủ ý
+## 🛠 Công nghệ và yêu cầu
 
-- Chỉ hỗ trợ HTML tĩnh, bố cục `article`, `main`, `.article-content`, và ảnh `jpg/jpeg/png/gif/webp`.
-- Không vượt đăng nhập, cookie, paywall; không tải CSS, JS, iframe, video hay tài nguyên ngoài khác.
-- Danh sách host mặc định chỉ có `localhost`/`127.0.0.1`, phù hợp dữ liệu giả trong bài nộp. Muốn dùng host khác phải chủ động thêm vào `config.php`.
+- PHP **8.1+** với các extension:
+  - `pdo_mysql`
+  - `curl`
+  - `dom`
+  - `mbstring`
+- MySQL 8+ hoặc MariaDB 10.4+.
+- Apache + PHP; XAMPP được khuyến nghị trên Windows.
+- Git.
 
-## Mã và tài nguyên tái sử dụng
+## 🚀 Cài đặt nhanh với XAMPP
 
-- Mã ứng dụng trong `src/` và `public/` do nhóm viết, dùng PHP standard library/extensions nêu trên, không có dependency bên thứ ba.
-- Nội dung, ảnh SVG mẫu trong `samples/` là dữ liệu giả do nhóm tạo.
+### 1. Khởi động XAMPP
 
-Xem [CONTRIBUTING.md](CONTRIBUTING.md) để cộng tác và [LICENSE](LICENSE) để biết giấy phép.
+Mở XAMPP Control Panel và bật:
+
+```text
+Apache
+MySQL
+```
+
+### 2. Đặt source vào htdocs
+
+```text
+C:\xampp\htdocs\WebArchive
+```
+
+### 3. Tạo database
+
+Mở [phpMyAdmin](http://localhost/phpmyadmin), tạo database:
+
+```text
+webshelf
+```
+
+Chọn collation:
+
+```text
+utf8mb4_unicode_ci
+```
+
+### 4. Import schema và dữ liệu mẫu
+
+Trong phpMyAdmin, chọn database `webshelf` → **Import** lần lượt:
+
+```text
+database/schema.sql
+database/seed.sql
+```
+
+Hoặc dùng terminal XAMPP:
+
+```powershell
+C:\xampp\mysql\bin\mysql.exe -u root -p webshelf < database\schema.sql
+C:\xampp\mysql\bin\mysql.exe -u root -p webshelf < database\seed.sql
+```
+
+### 5. Cấu hình kết nối
+
+Sao chép [config.example.php](config.example.php) thành `config.php`, sau đó điền
+mật khẩu MariaDB local. Không commit `config.php`.
+
+```php
+'db' => [
+    'dsn' => 'mysql:host=127.0.0.1;port=3306;dbname=webshelf;charset=utf8mb4',
+    'user' => 'root',
+    'pass' => 'MAT_KHAU_MYSQL',
+],
+```
+
+Trong XAMPP mặc định, mật khẩu root thường để trống. Hãy dùng đúng cấu hình máy bạn.
+
+### 6. Mở ứng dụng
+
+- Ứng dụng: [http://localhost/WebArchive/public/](http://localhost/WebArchive/public/)
+- Website fixture: [http://localhost/WebArchive/samples/site/article-01.html](http://localhost/WebArchive/samples/site/article-01.html)
+
+Nếu trình duyệt giữ CSS cũ, nhấn `Ctrl + Shift + R`.
+
+## 👤 Tài khoản demo
+
+Seed data cung cấp ba tài khoản không có mật khẩu để mô phỏng quyền:
+
+| Tài khoản | Vai trò | Quyền kiểm thử |
+| --- | --- | --- |
+| **Alice Editor** | `owner` | Tạo/xóa thư viện, lưu URL, refresh, note, export |
+| **Bob Viewer** | `viewer` | Đọc và tìm kiếm trong thư viện được chia sẻ |
+| **Eve Outsider** | Không có membership | Bị từ chối khi truy cập dữ liệu của người khác |
+
+> Đây là tài khoản demo. Không dùng seed data hoặc tài khoản không mật khẩu khi triển khai
+> công khai.
+
+## 🎬 Hai kịch bản demo
+
+### ① Lưu → đọc → tìm kiếm
+
+1. Đăng nhập **Alice Editor**.
+2. Chọn **Lưu trang**.
+3. Nhập:
+   ```text
+   http://localhost/WebArchive/samples/site/article-01.html
+   ```
+4. Thêm nhãn `PHP` và bấm **Lấy và lưu**.
+5. Mở snapshot `v1`.
+6. Vào **Tìm kiếm**, nhập `mảng kết hợp`.
+
+Từ khóa chỉ nằm trong thân bài vẫn phải trả về đúng bài và đúng snapshot.
+
+### ② Refresh version và đọc offline
+
+1. Lưu `article-07.html` để có ảnh local.
+2. Mở snapshot và thêm ghi chú.
+3. Đổi tên tạm `samples\site` thành `samples\site-disabled`.
+4. Tải lại snapshot.
+5. Khôi phục tên thư mục, mở bài và bấm **Lấy bản mới**.
+
+Kỳ vọng: snapshot cũ và ghi chú cũ vẫn còn; ảnh đã lưu không cần tải lại từ nguồn.
+
+## 🧪 Fixture và kiểm thử
+
+Các fixture nằm trong [samples/site](samples/site), gồm:
+
+| Nhóm | Fixture |
+| --- | --- |
+| Hợp lệ | `article-01.html` đến `article-11.html` |
+| Ảnh | `article-01.html`, `article-07.html`, `image.php` |
+| Lỗi | `not-found.php`, `empty.html` |
+| Sanitization | `script.html` |
+| Redirect | `redirect-outside.php` |
+
+Danh sách 10 truy vấn và kết quả mong đợi: [samples/QUERIES.md](samples/QUERIES.md).
+Test case bắt buộc: [docs/TEST-CASES.md](docs/TEST-CASES.md).
+
+Kiểm tra cú pháp toàn bộ PHP bằng PowerShell:
+
+```powershell
+$files = Get-ChildItem -Recurse -File -Filter *.php
+foreach ($file in $files) {
+    php -l $file.FullName
+}
+```
+
+Kiểm tra extension:
+
+```powershell
+C:\xampp\php\php.exe -m | Select-String "pdo_mysql|curl|dom|mbstring"
+```
+
+## 🧱 Cấu trúc dự án
+
+```text
+WebArchive/
+├── database/
+│   ├── schema.sql             # Schema chuẩn hóa và FULLTEXT index
+│   └── seed.sql               # Tài khoản, thư viện, quyền và tag mẫu
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── DATA-MODEL.md
+│   └── TEST-CASES.md
+├── public/
+│   ├── assets/styles.css      # Giao diện responsive
+│   ├── index.php              # Front controller/router
+│   └── uploads/               # Ảnh local, không commit dữ liệu thật
+├── samples/site/              # Website fixture local
+├── src/
+│   ├── Fetcher.php            # Fetch, parse, sanitize, asset policy
+│   ├── bootstrap.php          # Session, extension, PDO bootstrap
+│   ├── functions.php          # Auth, CSRF, authorization, layout
+│   └── routes_extra.php       # Note, compare, Markdown export
+├── config.example.php
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── README.md
+```
+
+Tài liệu kiến trúc: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Mô hình dữ liệu: [docs/DATA-MODEL.md](docs/DATA-MODEL.md).
+
+## 🔐 Bảo mật và giới hạn
+
+- Chỉ cho phép scheme HTTP/HTTPS, host và port trong allowlist.
+- Kiểm tra DNS/IP, chặn địa chỉ nội bộ khi `allow_private_hosts=false`.
+- Kiểm tra lại mọi redirect và không để cURL tự follow redirect.
+- Giới hạn timeout, số redirect và kích thước response.
+- Dùng prepared statements và CSRF token cho form POST.
+- Sanitize HTML trước khi persist; reader không tin tưởng HTML gốc.
+- Kiểm tra quyền ở backend trước khi đọc page, snapshot, asset, note hoặc export.
+- Không commit `config.php`, password, token hoặc file upload.
+
+Chi tiết báo cáo lỗ hổng: [SECURITY.md](SECURITY.md).
+
+## 📚 Tài liệu
+
+- [Kiến trúc](docs/ARCHITECTURE.md)
+- [Mô hình dữ liệu](docs/DATA-MODEL.md)
+- [Test cases](docs/TEST-CASES.md)
+- [Truy vấn mẫu](samples/QUERIES.md)
+- [Hướng dẫn đóng góp](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
+- [License](LICENSE)
+
+## 🛠 Troubleshooting
+
+| Lỗi | Cách xử lý |
+| --- | --- |
+| `could not find driver` | Bật `pdo_mysql` trong `C:\xampp\php\php.ini`, restart Apache |
+| `Thiếu PHP extension` | Kiểm tra `curl`, `dom`, `mbstring`, `pdo_mysql` bằng `php -m` |
+| `Unknown database 'webshelf'` | Tạo database `webshelf` và import `database/schema.sql` |
+| `Table doesn't exist` | Import lại `database/schema.sql`, sau đó `database/seed.sql` |
+| Form không có thư viện | Đăng nhập Alice và kiểm tra `library_members` |
+| URL bị từ chối | Kiểm tra host/port trong `config.php`; XAMPP dùng port 80 |
+| Font/CSS cũ | Nhấn `Ctrl + Shift + R` hoặc mở URL có `?v=...` |
+
+## 📄 Giấy phép
+
+Mã nguồn được phát hành theo [MIT License](LICENSE). Dữ liệu fixture trong `samples/`
+là dữ liệu giả phục vụ học tập và kiểm thử.
