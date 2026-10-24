@@ -128,15 +128,18 @@ Trong XAMPP mặc định, mật khẩu root thường để trống. Hãy dùng
 
 Nếu trình duyệt giữ CSS cũ, nhấn `Ctrl + Shift + R`.
 
-## 👤 Tài khoản demo
+## 👤 Đăng nhập và tài khoản demo
 
-Seed data cung cấp ba tài khoản không có mật khẩu để mô phỏng quyền:
+Ứng dụng hỗ trợ đăng ký tài khoản bằng họ tên, email và mật khẩu. Tài khoản mới
+chưa thuộc thư viện nào; người dùng có thể tạo thư viện sau khi đăng nhập.
+
+Seed data cung cấp ba tài khoản demo để kiểm tra quyền:
 
 | Tài khoản | Vai trò | Quyền kiểm thử |
 | --- | --- | --- |
-| **Alice Editor** | `owner` | Tạo/xóa thư viện, lưu URL, refresh, note, export |
-| **Bob Viewer** | `viewer` | Đọc và tìm kiếm trong thư viện được chia sẻ |
-| **Eve Outsider** | Không có membership | Bị từ chối khi truy cập dữ liệu của người khác |
+| **Alice Editor** | `alice@example.test` / `Alice123!` | Tạo/xóa thư viện, lưu URL, refresh, note, export |
+| **Bob Viewer** | `bob@example.test` / `Bob123!` | Đọc và tìm kiếm trong thư viện được chia sẻ |
+| **Eve Outsider** | `eve@example.test` / `Eve123!` | Bị từ chối khi truy cập dữ liệu của người khác |
 
 > Đây là tài khoản demo. Không dùng seed data hoặc tài khoản không mật khẩu khi triển khai
 > công khai.

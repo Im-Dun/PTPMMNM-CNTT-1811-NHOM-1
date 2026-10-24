@@ -2,7 +2,73 @@
 require dirname(__DIR__).'/src/bootstrap.php';
 $r=$_GET['r']??'home';
 require dirname(__DIR__).'/src/routes_extra.php';
-if($r==='login'){ if($_SERVER['REQUEST_METHOD']==='POST'){verify_csrf();$s=$pdo->prepare('SELECT id,name,email FROM users WHERE id=?');$s->execute([(int)$_POST['user_id']]);$_SESSION['user']=$s->fetch();header('Location: ?');exit;} $users=$pdo->query('SELECT id,name FROM users ORDER BY id')->fetchAll();$o='<h1>Đăng nhập demo</h1><form method="post" class="card"><input type="hidden" name="csrf" value="'.csrf().'">';foreach($users as $x)$o.='<label><input type="radio" name="user_id" value="'.$x['id'].'" '.($x['id']==1?'checked':'').'> '.h($x['name']).'</label>';$o.='<button>Vào ứng dụng</button></form><p class="muted">Dữ liệu giả, dùng để kiểm tra quyền: Alice là owner, Bob chỉ xem thư viện chung, Eve không có quyền.</p>';layout('Đăng nhập',$o); }
+if($r==='login'){
+    if($_SERVER['REQUEST_METHOD']==='POST'){
+        verify_csrf();
+        $email=trim((string)($_POST['email']??''));
+        $password=(string)($_POST['password']??'');
+        $s=$pdo->prepare('SELECT id,name,email,password_hash FROM users WHERE email=?');
+        $s->execute([$email]);
+        $account=$s->fetch();
+        if(!$account || !password_verify($password,(string)$account['password_hash'])){
+            $error='Email hoặc mật khẩu không đúng.';
+        }else{
+            session_regenerate_id(true);
+            $_SESSION['user']=['id'=>$account['id'],'name'=>$account['name'],'email'=>$account['email']];
+            header('Location: ?');
+            exit;
+        }
+    }
+    $o='<h1>Đăng nhập</h1>'.(isset($error)?'<p class="error">'.h($error).'</p>':'')
+        .'<form method="post" class="card"><input type="hidden" name="csrf" value="'.csrf().'">'
+        .'<label>Email <input type="email" name="email" required autocomplete="email"></label>'
+        .'<label>Mật khẩu <input type="password" name="password" required autocomplete="current-password"></label>'
+        .'<button type="submit">Đăng nhập</button></form>'
+        .'<p class="muted">Chưa có tài khoản? <a href="?r=register">Đăng ký</a></p>';
+    layout('Đăng nhập',$o);
+}
+if($r==='register'){
+    if($_SERVER['REQUEST_METHOD']==='POST'){
+        verify_csrf();
+        $name=trim((string)($_POST['name']??''));
+        $email=trim((string)($_POST['email']??''));
+        $password=(string)($_POST['password']??'');
+        $confirmation=(string)($_POST['password_confirmation']??'');
+        if($name==='' || mb_strlen($name)>80){
+            $error='Tên phải có từ 1 đến 80 ký tự.';
+        }elseif(!filter_var($email,FILTER_VALIDATE_EMAIL) || mb_strlen($email)>120){
+            $error='Email không hợp lệ.';
+        }elseif(strlen($password)<8){
+            $error='Mật khẩu phải có ít nhất 8 ký tự.';
+        }elseif($password!==$confirmation){
+            $error='Mật khẩu xác nhận không khớp.';
+        }else{
+            try{
+                $insert=$pdo->prepare('INSERT INTO users(name,email,password_hash) VALUES(?,?,?)');
+                $insert->execute([$name,$email,password_hash($password,PASSWORD_DEFAULT)]);
+                session_regenerate_id(true);
+                $_SESSION['user']=['id'=>(int)$pdo->lastInsertId(),'name'=>$name,'email'=>$email];
+                header('Location: ?');
+                exit;
+            }catch(PDOException $e){
+                if($e->getCode()==='23000'){
+                    $error='Email này đã được đăng ký.';
+                }else{
+                    throw $e;
+                }
+            }
+        }
+    }
+    $o='<h1>Đăng ký</h1>'.(isset($error)?'<p class="error">'.h($error).'</p>':'')
+        .'<form method="post" class="card"><input type="hidden" name="csrf" value="'.csrf().'">'
+        .'<label>Họ tên <input name="name" required maxlength="80" autocomplete="name"></label>'
+        .'<label>Email <input type="email" name="email" required maxlength="120" autocomplete="email"></label>'
+        .'<label>Mật khẩu <input type="password" name="password" required minlength="8" autocomplete="new-password"></label>'
+        .'<label>Nhập lại mật khẩu <input type="password" name="password_confirmation" required minlength="8" autocomplete="new-password"></label>'
+        .'<button type="submit">Tạo tài khoản</button></form>'
+        .'<p class="muted">Đã có tài khoản? <a href="?r=login">Đăng nhập</a></p>';
+    layout('Đăng ký',$o);
+}
 if($r==='logout'){session_destroy();header('Location: ?r=login');exit;} $u=login_required();
 if($r==='asset'){ $id=(int)($_GET['id']??0);$s=$pdo->prepare('SELECT a.*,p.library_id FROM assets a JOIN snapshots x ON x.id=a.snapshot_id JOIN saved_pages p ON p.id=x.saved_page_id WHERE a.id=?');$s->execute([$id]);$a=$s->fetch();if(!$a)exit;allow($pdo,(int)$a['library_id'],['owner','editor','viewer']);$path=__DIR__.'/uploads/'.$a['local_name'];if(!is_file($path)){http_response_code(404);exit;}header('Content-Type: '.$a['mime']);header('X-Content-Type-Options: nosniff');readfile($path);exit; }
 if($r==='home'){ $s=$pdo->prepare('SELECT l.*,m.role FROM libraries l JOIN library_members m ON m.library_id=l.id WHERE m.user_id=?');$s->execute([$u['id']]);$libs=$s->fetchAll();$o='<section class="archive-hero"><div class="archive-emblem">▥</div><div><p class="eyebrow">THƯ VIỆN WEB CỦA BẠN</p><h1>Lưu những điều<br>bạn muốn nhớ.</h1><p>Đọc, tìm kiếm và giữ lại các trang web quan trọng — kể cả khi nguồn gốc đã thay đổi.</p><form class="archive-search" action="" method="get"><input type="hidden" name="r" value="search"><input name="q" required placeholder="Tìm trong kho lưu trữ của bạn"><button aria-label="Tìm kiếm">⌕</button></form></div></section><div class="section-title"><div><p class="eyebrow">BỘ SƯU TẬP</p><h2>Thư viện của tôi</h2></div><div class="actions"><a class="button" href="?r=library">Quản lý</a><a class="button button-primary" href="?r=save">＋ Lưu URL</a></div></div><div class="library-grid">';foreach($libs as $l){$q=$pdo->prepare('SELECT p.id,p.source_url,MAX(x.fetched_at) latest,MAX(x.id) snapshot_id FROM saved_pages p LEFT JOIN snapshots x ON x.saved_page_id=p.id WHERE p.library_id=? GROUP BY p.id ORDER BY latest DESC');$q->execute([$l['id']]);$pages=$q->fetchAll();$o.='<section class="card library-card"><div class="library-icon">▣</div><div><h2>'.h($l['name']).'</h2><span class="role-pill">'.h($l['role']).'</span></div><p class="muted">'.count($pages).' trang đã lưu</p><div class="saved-list">';foreach(array_slice($pages,0,3) as $p)$o.='<a href="?r=page&id='.$p['id'].'">'.h(parse_url($p['source_url'],PHP_URL_HOST) ?: $p['source_url']).'<small>'.h($p['latest']??'Đang xử lý').'</small></a>';$o.=(!$pages?'<span class="empty-note">Chưa có trang nào được lưu.</span>':'').'</div></section>';}$o.='</div><section class="advanced-search card"><div><p class="eyebrow">TÌM KIẾM NÂNG CAO</p><h2>Tìm theo nguồn hoặc nhãn</h2></div><form action="" method="get"><input type="hidden" name="r" value="search"><input name="q" required placeholder="Từ khóa"><input name="source" placeholder="URL nguồn"><input name="tag" placeholder="Nhãn, ví dụ PHP"><button>Tìm kiếm</button></form></section>';layout('Trang chủ',$o); }
