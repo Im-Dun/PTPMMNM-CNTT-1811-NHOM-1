@@ -218,6 +218,19 @@ final class Fetcher
         )) as $bad) {
             $bad->parentNode?->removeChild($bad);
         }
+        foreach (iterator_to_array($xpath->query(
+            './/nav|.//header|.//footer|.//aside|.//*[@role="navigation"]'
+            . '|.//*[contains(concat(" ", normalize-space(@class), " "), " mw-jump ")]'
+            . '|.//*[contains(concat(" ", normalize-space(@class), " "), " mw-editsection ")]'
+            . '|.//*[contains(concat(" ", normalize-space(@class), " "), " mw-portlet ")]'
+            . '|.//*[contains(concat(" ", normalize-space(@class), " "), " vector-toc ")]'
+            . '|.//*[contains(concat(" ", normalize-space(@class), " "), " interlanguage-link ")]'
+            . '|.//*[contains(concat(" ", normalize-space(@class), " "), " catlinks ")]'
+            . '|.//*[contains(concat(" ", normalize-space(@class), " "), " metadata ")]',
+            $node
+        )) as $navigation) {
+            $navigation->parentNode?->removeChild($navigation);
+        }
         foreach (iterator_to_array($xpath->query('.//*', $node)) as $element) {
             if (!$element instanceof DOMElement) {
                 continue;

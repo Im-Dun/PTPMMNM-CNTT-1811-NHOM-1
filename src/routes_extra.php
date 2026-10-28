@@ -2,6 +2,208 @@
 
 declare(strict_types=1);
 
+function html_to_markdown(string $html): string
+{
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
+    libxml_clear_errors();
+
+    $root = $dom->getElementsByTagName('body')->item(0);
+    if (!$root instanceof DOMNode) {
+        return trim(preg_replace('/\s+/', ' ', strip_tags($html)) ?? '');
+    }
+    remove_export_navigation($root);
+
+    $convert = static function (DOMNode $node) use (&$convert): string {
+        if ($node->nodeType === XML_TEXT_NODE) {
+            return preg_replace('/\s+/', ' ', $node->nodeValue ?? '') ?? '';
+        }
+        if ($node->nodeType !== XML_ELEMENT_NODE) {
+            return '';
+        }
+
+        $tag = strtolower($node->nodeName);
+        $inner = '';
+        foreach ($node->childNodes as $child) {
+            $inner .= $convert($child);
+        }
+        $inner = trim($inner);
+
+        return match ($tag) {
+            'h1' => '# ' . $inner . "\n\n",
+            'h2' => '## ' . $inner . "\n\n",
+            'h3' => '### ' . $inner . "\n\n",
+            'h4' => '#### ' . $inner . "\n\n",
+            'p', 'div', 'section', 'article' => $inner . "\n\n",
+            'br' => "\n",
+            'strong', 'b' => '**' . $inner . '**',
+            'em', 'i' => '*' . $inner . '*',
+            'a' => $node instanceof DOMElement && $node->hasAttribute('href')
+                ? (str_starts_with($node->getAttribute('href'), '#')
+                    ? $inner
+                    : '[' . $inner . '](' . $node->getAttribute('href') . ')')
+                : $inner,
+            'li' => '- ' . $inner . "\n",
+            'ul', 'ol' => $inner . "\n",
+            'blockquote' => '> ' . str_replace("\n", "\n> ", $inner) . "\n\n",
+            'code' => '`' . $inner . '`',
+            'pre' => "```\n" . $inner . "\n```\n\n",
+            'img' => $node instanceof DOMElement
+                ? '![' . $node->getAttribute('alt') . '](' . $node->getAttribute('src') . ")\n\n"
+                : '',
+            default => $inner,
+        };
+    };
+
+    $markdown = $convert($root);
+    $markdown = preg_replace("/[ \t]+\n/", "\n", $markdown) ?? $markdown;
+    $markdown = preg_replace("/\n{3,}/", "\n\n", $markdown) ?? $markdown;
+    $lines = preg_split("/\r\n|\r|\n/", $markdown) ?: [];
+    $lines = array_values(array_filter($lines, static function (string $line): bool {
+        $text = trim($line);
+        return $text !== ''
+            && !preg_match('/^(?:\[)?Coordinates\b/iu', $text)
+            && !preg_match('/^From Wikipedia, the free encyclopedia$/iu', $text)
+            && !preg_match('/^Capital of .{1,120}$/iu', $text)
+            && !preg_match('/^Capital city in England$/iu', $text)
+            && !preg_match('/^This article is about\b/iu', $text);
+    }));
+    $markdown = implode("\n\n", $lines);
+    return trim($markdown);
+}
+
+function clean_export_html(string $html): string
+{
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
+    libxml_clear_errors();
+    $root = $dom->getElementsByTagName('body')->item(0);
+    if (!$root instanceof DOMNode) {
+        return trim($html);
+    }
+    remove_export_navigation($root);
+    $result = '';
+    foreach ($root->childNodes as $child) {
+        $result .= $dom->saveHTML($child);
+    }
+    return trim($result);
+}
+
+function embed_export_assets(PDO $pdo, string $html, int $snapshotId): array
+{
+    $query = $pdo->prepare('SELECT id,source_url,local_name,mime FROM assets WHERE snapshot_id=?');
+    $query->execute([$snapshotId]);
+    $assets = [];
+    foreach ($query as $asset) {
+        $path = dirname(__DIR__) . '/public/uploads/' . basename((string) $asset['local_name']);
+        if (!is_file($path)) {
+            continue;
+        }
+        $dataUri = 'data:' . $asset['mime'] . ';base64,' . base64_encode((string) file_get_contents($path));
+        $html = str_replace('?r=asset&id=' . (int) $asset['id'], $dataUri, $html);
+        $html = str_replace('?r=asset&amp;id=' . (int) $asset['id'], $dataUri, $html);
+        $assets[] = [
+            'source_url' => $asset['source_url'],
+            'mime' => $asset['mime'],
+            'embedded' => true,
+            'data_base64' => base64_encode((string) file_get_contents($path)),
+        ];
+    }
+    return [$html, $assets];
+}
+
+function link_export_assets(PDO $pdo, string $html, int $snapshotId): string
+{
+    $query = $pdo->prepare('SELECT id,source_url FROM assets WHERE snapshot_id=?');
+    $query->execute([$snapshotId]);
+    foreach ($query as $asset) {
+        $sourceUrl = (string) $asset['source_url'];
+        $html = str_replace('?r=asset&id=' . (int) $asset['id'], $sourceUrl, $html);
+        $html = str_replace('?r=asset&amp;id=' . (int) $asset['id'], htmlspecialchars($sourceUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $html);
+    }
+    return $html;
+}
+
+function text_only_export_html(string $html): string
+{
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
+    libxml_clear_errors();
+    $root = $dom->getElementsByTagName('body')->item(0);
+    if (!$root instanceof DOMNode) {
+        return trim($html);
+    }
+
+    remove_export_navigation($root);
+    $xpath = new DOMXPath($dom);
+    foreach (iterator_to_array($xpath->query(
+        './/img|.//picture|.//svg|.//video|.//audio|.//canvas|.//table|.//figure|.//sup'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " infobox ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " sidebar ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " vertical-nav ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " gallery ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " thumb ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " reflist ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " references ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " metadata ")]',
+        $root
+    )) as $element) {
+        $element->parentNode?->removeChild($element);
+    }
+    foreach (iterator_to_array($xpath->query('.//a[not(normalize-space())]', $root)) as $emptyLink) {
+        $emptyLink->parentNode?->removeChild($emptyLink);
+    }
+    foreach (iterator_to_array($xpath->query('.//a[starts-with(@href, "#")]', $root)) as $anchor) {
+        $anchor->parentNode?->replaceChild($dom->createTextNode($anchor->textContent), $anchor);
+    }
+
+    $result = '';
+    foreach ($root->childNodes as $child) {
+        $result .= $dom->saveHTML($child);
+    }
+    return trim($result);
+}
+
+function export_asset_data(PDO $pdo, int $snapshotId): array
+{
+    $query = $pdo->prepare('SELECT source_url,local_name,mime FROM assets WHERE snapshot_id=?');
+    $query->execute([$snapshotId]);
+    $assets = [];
+    foreach ($query as $asset) {
+        $path = dirname(__DIR__) . '/public/uploads/' . basename((string) $asset['local_name']);
+        if (!is_file($path)) {
+            continue;
+        }
+        $assets[] = [
+            'source_url' => $asset['source_url'],
+            'mime' => $asset['mime'],
+            'data_base64' => base64_encode((string) file_get_contents($path)),
+        ];
+    }
+    return $assets;
+}
+
+function remove_export_navigation(DOMNode $root): void
+{
+    $xpath = new DOMXPath($root->ownerDocument);
+    foreach (iterator_to_array($xpath->query(
+        './/nav|.//header|.//footer|.//aside|.//*[@role="navigation"]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " mw-jump ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " mw-editsection ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " mw-portlet ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " vector-toc ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " interlanguage-link ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " catlinks ")]'
+        . '|.//*[contains(concat(" ", normalize-space(@class), " "), " metadata ")]',
+        $root
+    )) as $navigation) {
+        $navigation->parentNode?->removeChild($navigation);
+    }
+}
+
 if ($r === 'export-md') {
     $currentUser = login_required();
     $page = page_library($pdo, (int) ($_GET['id'] ?? 0));
@@ -17,13 +219,15 @@ if ($r === 'export-md') {
         exit('Không tìm thấy phiên bản.');
     }
 
-    $content = '# ' . $snapshots[0]['title'] . "\n\n"
+    $content = '# ' . $page['title'] . "\n\n"
         . '- Nguồn: ' . $page['source_url'] . "\n"
         . '- Thư viện: ' . $page['library_name'] . "\n\n";
     foreach ($snapshots as $snapshot) {
+        $cleanHtml = text_only_export_html(clean_export_html((string) $snapshot['clean_html']));
         $content .= '## Phiên bản ' . $snapshot['version_no'] . ' - ' . $snapshot['fetched_at'] . "\n\n"
-            . strip_tags($snapshot['clean_html']) . "\n\n";
+            . html_to_markdown($cleanHtml) . "\n\n";
     }
+
     header('Content-Type: text/markdown; charset=utf-8');
     header('Content-Disposition: attachment; filename="webshelf-page-' . $page['id'] . '.md"');
     echo $content;

@@ -6,7 +6,7 @@ return [
     'allowed_ports' => [80, 443, 8081],
     // Keep true only for the local fixture server; use false for public deployments.
     'allow_private_hosts' => true,
-    'fetch_timeout' => 8,
+    'fetch_timeout' => 60,
     'max_redirects' => 5,
     'max_response_bytes' => 5 * 1024 * 1024,
 ];
