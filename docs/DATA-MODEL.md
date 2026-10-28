@@ -11,3 +11,8 @@
 
 Snapshot và asset dùng khóa ngoại cascade theo bài lưu; lịch sử version không bị thay
 thế khi refresh. Các thao tác tạo snapshot/asset phải nằm trong transaction của use case.
+
+Owner quản lý thành viên qua `library_members`; `editor` được tạo và refresh snapshot,
+còn `viewer` chỉ đọc, tìm kiếm và xuất. Nhãn được tạo trong `tags` và gán nhiều-nhiều
+qua `saved_page_tags`; xóa nhãn không xóa bài lưu. Ghi chú luôn tham chiếu
+`snapshot_id` để mỗi phiên bản có ghi chú độc lập.

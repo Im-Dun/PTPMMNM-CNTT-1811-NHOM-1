@@ -8,6 +8,30 @@ function role(PDO $pdo, int $libraryId, int $userId): ?string { $s=$pdo->prepare
 function allow(PDO $pdo, int $libraryId, array $roles): void { $u=login_required(); if (!in_array(role($pdo,$libraryId,(int)$u['id']), $roles, true)) { http_response_code(403); exit('Bạn không có quyền với thư viện này.'); } }
 function page_library(PDO $pdo, int $pageId): array { $s=$pdo->prepare('SELECT p.*, l.name library_name FROM saved_pages p JOIN libraries l ON l.id=p.library_id WHERE p.id=?'); $s->execute([$pageId]); $p=$s->fetch(); if (!$p) { http_response_code(404); exit('Không tìm thấy bài lưu.'); } return $p; }
 function snapshot(PDO $pdo, int $id): array { $s=$pdo->prepare('SELECT s.*,p.library_id,p.source_url,l.name library_name FROM snapshots s JOIN saved_pages p ON p.id=s.saved_page_id JOIN libraries l ON l.id=p.library_id WHERE s.id=?'); $s->execute([$id]); $x=$s->fetch(); if(!$x){http_response_code(404);exit('Không tìm thấy phiên bản.');} return $x; }
+function library_tags(PDO $pdo, int $libraryId, int $pageId = 0): array {
+    $sql = 'SELECT t.id,t.name,CASE WHEN spt.saved_page_id IS NULL THEN 0 ELSE 1 END selected
+        FROM tags t LEFT JOIN saved_page_tags spt ON spt.tag_id=t.id AND spt.saved_page_id=?
+        WHERE t.library_id=? ORDER BY t.name';
+    $s = $pdo->prepare($sql);
+    $s->execute([$pageId, $libraryId]);
+    return $s->fetchAll();
+}
+function replace_page_tags(PDO $pdo, int $libraryId, int $pageId, string $input): void {
+    $names = array_values(array_unique(array_filter(array_map(
+        static fn (string $name): string => trim($name),
+        preg_split('/[,;\n]+/', $input) ?: []
+    ), static fn (string $name): bool => $name !== '')));
+    foreach ($names as $name) {
+        if (mb_strlen($name) > 60) {
+            throw new RuntimeException('Mỗi nhãn không được dài quá 60 ký tự.');
+        }
+    }
+    $pdo->prepare('DELETE spt FROM saved_page_tags spt JOIN tags t ON t.id=spt.tag_id WHERE spt.saved_page_id=? AND t.library_id=?')
+        ->execute([$pageId, $libraryId]);
+    foreach ($names as $name) {
+        add_tag($pdo, $libraryId, $pageId, $name);
+    }
+}
 function layout(string $title, string $body): never {
     $u=user(); $route=$_GET['r']??'home';
     $account=$u ? '<div class="account"><span class="avatar">'.h(mb_strtoupper(mb_substr($u['name'],0,1))).'</span><span>'.h($u['name']).'</span><a href="?r=logout">Đăng xuất</a></div>' : '<a class="login-link" href="?r=login">Đăng nhập</a>';

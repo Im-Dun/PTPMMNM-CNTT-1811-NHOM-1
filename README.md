@@ -121,10 +121,29 @@ mật khẩu MariaDB local. Không commit `config.php`.
 
 Trong XAMPP mặc định, mật khẩu root thường để trống. Hãy dùng đúng cấu hình máy bạn.
 
-### 6. Mở ứng dụng
+### 6. Mở ứng dụng và server fixture
 
 - Ứng dụng: [http://localhost/WebArchive/public/](http://localhost/WebArchive/public/)
-- Website fixture: [http://localhost/WebArchive/samples/site/article-01.html](http://localhost/WebArchive/samples/site/article-01.html)
+- Website fixture (Apache): [http://localhost/WebArchive/samples/site/article-01.html](http://localhost/WebArchive/samples/site/article-01.html)
+
+Để kiểm thử đúng việc lưu độc lập với trang nguồn, chạy fixture bằng PHP server
+riêng ở cổng `8081` trong một PowerShell khác:
+
+```powershell
+cd C:\xampp\htdocs\WebArchive
+& "C:\xampp\php\php.exe" -S 127.0.0.1:8081 -t "C:\xampp\htdocs\WebArchive\samples\site"
+```
+
+Giữ cửa sổ PowerShell này mở và kiểm tra:
+
+```text
+http://127.0.0.1:8081/article-01.html
+```
+
+Khi lưu URL trong ứng dụng, dùng `http://127.0.0.1:8081/...`, không dùng URL
+Apache `/WebArchive/samples/site/...` nếu muốn mô phỏng server nguồn bị dừng.
+`localhost` có thể không hoạt động trên một số máy Windows; `127.0.0.1` là lựa
+chọn ổn định hơn.
 
 Nếu trình duyệt giữ CSS cũ, nhấn `Ctrl + Shift + R`.
 
@@ -152,7 +171,7 @@ Seed data cung cấp ba tài khoản demo để kiểm tra quyền:
 2. Chọn **Lưu trang**.
 3. Nhập:
    ```text
-   http://localhost/WebArchive/samples/site/article-01.html
+   http://127.0.0.1:8081/article-01.html
    ```
 4. Thêm nhãn `PHP` và bấm **Lấy và lưu**.
 5. Mở snapshot `v1`.
@@ -162,11 +181,14 @@ Từ khóa chỉ nằm trong thân bài vẫn phải trả về đúng bài và 
 
 ### ② Refresh version và đọc offline
 
-1. Lưu `article-07.html` để có ảnh local.
-2. Mở snapshot và thêm ghi chú.
-3. Đổi tên tạm `samples\site` thành `samples\site-disabled`.
-4. Tải lại snapshot.
-5. Khôi phục tên thư mục, mở bài và bấm **Lấy bản mới**.
+1. Trong khi fixture server đang chạy, lưu:
+   ```text
+   http://127.0.0.1:8081/article-07.html
+   ```
+2. Mở snapshot và kiểm tra ảnh, sau đó thêm ghi chú.
+3. Quay lại PowerShell chạy fixture server và nhấn `Ctrl + C`.
+4. Tải lại snapshot trong WebArchive; không dừng Apache hoặc MySQL.
+5. Khởi động lại fixture server nếu muốn bấm **Lấy bản mới**.
 
 Kỳ vọng: snapshot cũ và ghi chú cũ vẫn còn; ảnh đã lưu không cần tải lại từ nguồn.
 
@@ -185,20 +207,25 @@ Các fixture nằm trong [samples/site](samples/site), gồm:
 Danh sách 10 truy vấn và kết quả mong đợi: [samples/QUERIES.md](samples/QUERIES.md).
 Test case bắt buộc: [docs/TEST-CASES.md](docs/TEST-CASES.md).
 
-Kiểm tra cú pháp toàn bộ PHP bằng PowerShell:
+Kiểm tra cú pháp toàn bộ PHP bằng PowerShell từ thư mục gốc dự án:
 
 ```powershell
 $files = Get-ChildItem -Recurse -File -Filter *.php
 foreach ($file in $files) {
-    php -l $file.FullName
+    & "C:\xampp\php\php.exe" -l $file.FullName
 }
 ```
 
 Kiểm tra extension:
 
 ```powershell
-C:\xampp\php\php.exe -m | Select-String "pdo_mysql|curl|dom|mbstring"
+& "C:\xampp\php\php.exe" -m | Select-String "pdo_mysql|curl|dom|mbstring"
 ```
+
+Các kịch bản chi tiết, gồm lỗi 404/trang rỗng, sanitize script, quyền,
+refresh, ghi chú, tìm kiếm và export, nằm trong
+[docs/TEST-CASES.md](docs/TEST-CASES.md). Nếu không có PHP CLI/XAMPP thì không
+đánh dấu kiểm thử là PASS; cần ghi rõ môi trường bị thiếu.
 
 ## 🧱 Cấu trúc dự án
 
@@ -262,7 +289,9 @@ Chi tiết báo cáo lỗ hổng: [SECURITY.md](SECURITY.md).
 | `Unknown database 'webshelf'` | Tạo database `webshelf` và import `database/schema.sql` |
 | `Table doesn't exist` | Import lại `database/schema.sql`, sau đó `database/seed.sql` |
 | Form không có thư viện | Đăng nhập Alice và kiểm tra `library_members` |
-| URL bị từ chối | Kiểm tra host/port trong `config.php`; XAMPP dùng port 80 |
+| URL bị từ chối | Kiểm tra host/port trong `config.php`; ứng dụng dùng Apache port 80, fixture riêng dùng port 8081 |
+| `Failed to connect ... port 8081` | Khởi động PHP fixture server bằng lệnh ở mục cài đặt, giữ PowerShell mở và dùng URL `127.0.0.1:8081` |
+| Snapshot mở được nhưng chưa kiểm tra offline | Có thể đã lưu URL Apache `/samples/site`; lưu lại bằng `http://127.0.0.1:8081/...`, sau đó dừng fixture server bằng `Ctrl+C` |
 | Font/CSS cũ | Nhấn `Ctrl + Shift + R` hoặc mở URL có `?v=...` |
 
 ## 📄 Giấy phép

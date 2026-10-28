@@ -7,3 +7,5 @@
 - Hardening URL fetch: kiểm tra scheme/host/cổng, DNS/IP, redirect, protocol và kích
   thước response; viết lại URL tương đối an toàn hơn.
 - Bổ sung tài liệu chính sách bảo mật và cấu hình môi trường mẫu.
+- Hoàn thiện quản lý thành viên/quyền, nhãn nhiều-nhãn, ghi chú theo snapshot,
+  tìm kiếm có snippet và xuất Markdown.
