@@ -1,0 +1,1 @@
+<?php http_response_code(404); header('Content-Type: text/html; charset=utf-8'); ?><!doctype html><html lang="vi"><head><meta charset="utf-8"><title>404</title></head><body><article><h1>404</h1><p>Not found: bài viết không tồn tại trên máy chủ mẫu.</p></article></body></html>

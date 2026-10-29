@@ -1,0 +1,337 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
+
+:root {
+  --ink: #123d42;
+  --teal: #17565a;
+  --gold: #c58b38;
+  --paper: #f7f7f2;
+  --line: #dae4df;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "DM Sans", sans-serif;
+  color: var(--ink);
+  background-color: var(--paper);
+  margin: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+h1, h2, h3 {
+  font-family: "Fraunces", serif;
+  letter-spacing: -.035em;
+}
+
+button, a, input, select {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid #d6a44b;
+  outline-offset: 3px;
+}
+
+.shell {
+  width: 100%;
+  max-width: 1200px;
+  margin: auto;
+  padding-inline: clamp(18px, 4vw, 54px);
+}
+
+.nav-link {
+  border-bottom: 2px solid transparent;
+  padding: 10px 0;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.nav-link.active,
+.nav-link:hover {
+  border-color: var(--gold);
+  color: var(--teal);
+}
+
+.btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  border-radius: 9px;
+  padding: 12px 19px;
+  font-weight: 700;
+  transition: transform .18s, background .18s;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.btn:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--teal);
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover {
+  background: #0e4145;
+}
+
+.btn-light {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.btn-gold {
+  background: #e6b65c;
+  color: #17393b;
+  border: none;
+}
+
+.field {
+  width: 100%;
+  border: 1px solid #bdcec8;
+  background: white;
+  border-radius: 9px;
+  padding: 12px 14px;
+  outline: none;
+}
+
+.field:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px #17565a20;
+}
+
+.surface {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  box-shadow: 0 8px 30px #123d4209;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: .17em;
+  font-size: 11px;
+  font-weight: 700;
+  color: #9b6b27;
+}
+
+.hero {
+  background: #123e42;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: .25;
+}
+
+.hero:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #123e42 3%, #123e42de 50%, #123e4260);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+.article-body {
+  font-family: "Fraunces", serif;
+  font-size: 19px;
+  line-height: 1.85;
+  color: #25454a;
+}
+
+.article-body p + p {
+  margin-top: 1.2em;
+}
+
+.tag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #e7f1ed;
+  color: #245d55;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 850px) {
+  #desktop-nav { display: none; }
+  #mobile-toggle { display: inline-flex; }
+  #mobile-nav:not([hidden]) { display: grid; }
+}
+
+@media (min-width: 851px) {
+  #mobile-toggle, #mobile-nav { display: none !important; }
+}
+/* Tối ưu hóa giao diện bài đọc chuẩn Reader View */
+.article-body {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.15rem;
+  line-height: 1.8;
+  color: #2c3e50;
+  max-width: 740px;
+  margin: 0 auto;
+}
+
+.article-body p {
+  margin-bottom: 1.5em;
+  text-align: justify;
+}
+
+.article-body h1, .article-body h2, .article-body h3 {
+  font-family: "DM Sans", sans-serif;
+  color: #123d42;
+  font-weight: 700;
+  margin-top: 1.8em;
+  margin-bottom: 0.8em;
+  line-height: 1.3;
+}
+
+.article-body img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+  margin: 1.5rem auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.article-body blockquote {
+  border-left: 4px solid #c58b38;
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: #567074;
+}
+/* Custom Typography cho bài đọc: Times New Roman, chữ đen, link màu xanh */
+.article-body {
+  font-family: "Times New Roman", Times, serif !important;
+  font-size: 1.2rem;
+  line-height: 1.8;
+  color: #000000 !important; /* Chữ màu đen hoàn toàn */
+}
+
+/* Ép toàn bộ các thẻ văn bản, tiêu đề bên trong bài viết về màu đen và phông Times New Roman */
+.article-body *,
+.article-body p,
+.article-body h1,
+.article-body h2,
+.article-body h3,
+.article-body h4,
+.article-body h5,
+.article-body h6,
+.article-body span,
+.article-body li,
+.article-body blockquote {
+  font-family: "Times New Roman", Times, serif !important;
+  color: #000000 !important;
+}
+
+/* Giữ lề và khoảng cách các đoạn văn cho dễ đọc */
+.article-body p {
+  margin-bottom: 1.5em;
+  text-align: justify;
+}
+
+.article-body h1, 
+.article-body h2, 
+.article-body h3 {
+  font-weight: bold;
+  margin-top: 1.6em;
+  margin-bottom: 0.8em;
+  line-height: 1.3;
+}
+
+/* Định dạng riêng cho các từ có gắn liên kết (thẻ <a>) thành màu xanh */
+.article-body a,
+.article-body a * {
+  color: #0066cc !important; /* Màu xanh lá/xanh dương cho liên kết */
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
+
+.article-body a:hover {
+  color: #004499 !important; /* Màu xanh đậm hơn khi di chuột qua */
+}
+
+/* Định dạng hình ảnh trong bài đọc */
+.article-body img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+  margin: 1.5rem auto;
+  border-radius: 4px;
+}
+/* Styling cho phân trang */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 30px 0;
+}
+
+.pagination a, .pagination span {
+    display: inline-block;
+    padding: 8px 16px;
+    text-decoration: none;
+    color: #333;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.pagination a:hover {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.pagination .active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+    font-weight: bold;
+}
+
+.pagination .disabled {
+    color: #ccc;
+    pointer-events: none;
+    border-color: #eee;
+}
+.page-item.disabled .page-link {
+    color: #cbd5e1; /* Màu xám mờ */
+    pointer-events: none; /* Phủ nhận hành vi click */
+    background-color: #f8fafc;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+}
