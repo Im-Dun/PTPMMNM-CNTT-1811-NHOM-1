@@ -19,13 +19,15 @@ và quản lý quyền truy cập theo thư viện.
 
 ## ✨ Điểm nổi bật
 
-| 📚 Thư viện | 🌐 Fetch an toàn | 🧹 Reader sạch | 🔎 Tìm kiếm | 🕘 Lịch sử |
+| 📚 Thư viện | 👥 Thành viên | 🌐 Fetch an toàn | 🧹 Reader sạch | 🕘 Lịch sử |
 | --- | --- | --- | --- | --- |
-| Owner/editor/viewer, thư viện riêng và chia sẻ | Kiểm tra URL, IP, port và redirect | Loại script, event handler, iframe và form | Tìm title + toàn bộ thân bài | Mỗi lần refresh tạo version mới |
+| Thư viện riêng và chia sẻ | Owner/editor/viewer, thêm/đổi/xóa thành viên | Kiểm tra URL, IP, port và redirect | Loại script, event handler, iframe và form | Mỗi lần refresh tạo version mới |
 
 - **Offline reader:** nội dung và ảnh đã cam kết lưu không phụ thuộc website nguồn khi mở lại.
 - **Snapshot bất biến:** v1, v2, ... được giữ nguyên; ghi chú gắn với đúng phiên bản.
 - **Đặt lịch cập nhật:** chọn chu kỳ, giờ chạy và nhận thông báo khi cập nhật thành công/thất bại.
+- **Quản lý thành viên:** owner có thể thêm tài khoản bằng email, cấp quyền editor/viewer,
+  đổi quyền hoặc xóa thành viên khỏi thư viện.
 - **Phân quyền backend:** page, snapshot, asset, note và export đều kiểm tra membership.
 - **Dữ liệu mẫu local:** 15+ fixture và 10 truy vấn kiểm thử, không phụ thuộc Internet.
 - **Không framework lớn:** PHP thuần, PDO prepared statements, DOMDocument và cURL.
@@ -159,7 +161,8 @@ schema bằng migration.
 Khi người dùng đăng nhập và mở ứng dụng, WebShelf tự kiểm tra và chạy các lịch đã đến
 hạn ngay trong request PHP. Vì PHP web không có tiến trình nền thường trực, nếu muốn lịch
 chạy chính xác cả khi không có ai mở ứng dụng, có thể gọi worker định kỳ bởi cron hoặc
-Windows Task Scheduler. Với XAMPP, tạo task chạy mỗi phút bằng lệnh:
+Windows Task Scheduler. Đây là tùy chọn vận hành, không bắt buộc khi đang sử dụng app.
+Với XAMPP, tạo task chạy mỗi phút bằng lệnh:
 
 ```powershell
 C:\xampp\php\php.exe C:\xampp\htdocs\PTPMMNM-CNTT-1811-NHOM-1\bin\run-scheduler.php
@@ -167,7 +170,8 @@ C:\xampp\php\php.exe C:\xampp\htdocs\PTPMMNM-CNTT-1811-NHOM-1\bin\run-scheduler.
 
 Worker chỉ xử lý lịch đã đến hạn, tạo snapshot version mới và ghi thông báo trong mục
 **Thông báo**. Worker có thể chạy lặp lại an toàn; mỗi lịch chỉ được xử lý một lần tại
-một thời điểm nhờ khóa hàng trong database.
+một thời điểm nhờ khóa hàng trong database. Lịch tháng cho phép ngày `1–31`; nếu tháng
+không có ngày đã chọn, hệ thống chạy vào ngày cuối tháng.
 
 ## 👤 Đăng nhập và tài khoản demo
 
@@ -214,6 +218,15 @@ Từ khóa chỉ nằm trong thân bài vẫn phải trả về đúng bài và 
 
 Kỳ vọng: snapshot cũ và ghi chú cũ vẫn còn; ảnh đã lưu không cần tải lại từ nguồn.
 
+### ③ Quản lý thành viên và cập nhật tự động
+
+1. Đăng nhập bằng tài khoản owner, mở **Thư viện của tôi** và chọn **Thành viên**.
+2. Thêm email của tài khoản khác, chọn `Editor` hoặc `Viewer`.
+3. Đổi quyền hoặc xóa thành viên; owner không thể tự xóa hoặc hạ quyền của mình.
+4. Mở một bài trong thư viện, bật lịch cập nhật và bật các tùy chọn thông báo.
+5. Đặt lịch chạy gần thời điểm hiện tại, tải lại ứng dụng để PHP tự xử lý lịch đến hạn.
+6. Kiểm tra version mới và mở mục **Thông báo** để xác nhận trạng thái.
+
 ## 🧪 Fixture và kiểm thử
 
 Các fixture nằm trong [samples/site](samples/site), gồm:
@@ -256,6 +269,7 @@ WebArchive/
 ├── database/
 │   ├── schema.sql             # Schema chuẩn hóa và FULLTEXT index
 │   └── seed.sql               # Tài khoản, thư viện, quyền và tag mẫu
+│   └── migrate-schedules.sql  # Bảng lịch cập nhật và thông báo
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── DATA-MODEL.md
@@ -269,7 +283,10 @@ WebArchive/
 │   ├── Fetcher.php            # Fetch, parse, sanitize, asset policy
 │   ├── bootstrap.php          # Session, extension, PDO bootstrap
 │   ├── functions.php          # Auth, CSRF, authorization, layout
+│   ├── scheduler.php          # Tính lịch, chạy lịch đến hạn, tạo thông báo
 │   └── routes_extra.php       # Note, compare, Markdown export
+├── bin/
+│   └── run-scheduler.php      # Worker tùy chọn cho cron/Windows Task Scheduler
 ├── config.example.php
 ├── CONTRIBUTING.md
 ├── SECURITY.md
