@@ -158,20 +158,11 @@ Mở trang chi tiết của một bài đã lưu, bật **Tự động cập nh�
 thủ công [database/migrate-schedules.sql](database/migrate-schedules.sql) nếu muốn quản lý
 schema bằng migration.
 
-Khi người dùng đăng nhập và mở ứng dụng, WebShelf tự kiểm tra và chạy các lịch đã đến
-hạn ngay trong request PHP. Vì PHP web không có tiến trình nền thường trực, nếu muốn lịch
-chạy chính xác cả khi không có ai mở ứng dụng, có thể gọi worker định kỳ bởi cron hoặc
-Windows Task Scheduler. Đây là tùy chọn vận hành, không bắt buộc khi đang sử dụng app.
-Với XAMPP, tạo task chạy mỗi phút bằng lệnh:
-
-```powershell
-C:\xampp\php\php.exe C:\xampp\htdocs\PTPMMNM-CNTT-1811-NHOM-1\bin\run-scheduler.php
-```
-
-Worker chỉ xử lý lịch đã đến hạn, tạo snapshot version mới và ghi thông báo trong mục
-**Thông báo**. Worker có thể chạy lặp lại an toàn; mỗi lịch chỉ được xử lý một lần tại
-một thời điểm nhờ khóa hàng trong database. Lịch tháng cho phép ngày `1–31`; nếu tháng
-không có ngày đã chọn, hệ thống chạy vào ngày cuối tháng.
+Khi người dùng đăng nhập và mở hoặc tải lại ứng dụng, WebShelf tự kiểm tra và chạy các
+lịch đã đến hạn ngay trong request PHP. Không cần chạy PowerShell, cron hoặc tiến trình
+phụ trợ nào. Lịch tạo snapshot version mới và ghi thông báo trong mục **Thông báo**.
+Lịch tháng cho phép ngày `1–31`; nếu tháng không có ngày đã chọn, hệ thống chạy vào ngày
+cuối tháng.
 
 ## 👤 Đăng nhập và tài khoản demo
 
@@ -225,7 +216,8 @@ Kỳ vọng: snapshot cũ và ghi chú cũ vẫn còn; ảnh đã lưu không c�
 3. Đổi quyền hoặc xóa thành viên; owner không thể tự xóa hoặc hạ quyền của mình.
 4. Mở một bài trong thư viện, bật lịch cập nhật và bật các tùy chọn thông báo.
 5. Đặt lịch chạy gần thời điểm hiện tại, tải lại ứng dụng để PHP tự xử lý lịch đến hạn.
-6. Kiểm tra version mới và mở mục **Thông báo** để xác nhận trạng thái.
+6. Tải lại ứng dụng sau thời điểm lịch đến hạn, kiểm tra version mới và mở mục
+   **Thông báo** để xác nhận trạng thái.
 
 ## 🧪 Fixture và kiểm thử
 
@@ -285,8 +277,6 @@ WebArchive/
 │   ├── functions.php          # Auth, CSRF, authorization, layout
 │   ├── scheduler.php          # Tính lịch, chạy lịch đến hạn, tạo thông báo
 │   └── routes_extra.php       # Note, compare, Markdown export
-├── bin/
-│   └── run-scheduler.php      # Worker tùy chọn cho cron/Windows Task Scheduler
 ├── config.example.php
 ├── CONTRIBUTING.md
 ├── SECURITY.md
