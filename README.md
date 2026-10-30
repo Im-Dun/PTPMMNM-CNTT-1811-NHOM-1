@@ -25,6 +25,7 @@ và quản lý quyền truy cập theo thư viện.
 
 - **Offline reader:** nội dung và ảnh đã cam kết lưu không phụ thuộc website nguồn khi mở lại.
 - **Snapshot bất biến:** v1, v2, ... được giữ nguyên; ghi chú gắn với đúng phiên bản.
+- **Đặt lịch cập nhật:** chọn chu kỳ, giờ chạy và nhận thông báo khi cập nhật thành công/thất bại.
 - **Phân quyền backend:** page, snapshot, asset, note và export đều kiểm tra membership.
 - **Dữ liệu mẫu local:** 15+ fixture và 10 truy vấn kiểm thử, không phụ thuộc Internet.
 - **Không framework lớn:** PHP thuần, PDO prepared statements, DOMDocument và cURL.
@@ -146,6 +147,27 @@ Apache `/WebArchive/samples/site/...` nếu muốn mô phỏng server nguồn b�
 chọn ổn định hơn.
 
 Nếu trình duyệt giữ CSS cũ, nhấn `Ctrl + Shift + R`.
+
+### 7. Chạy cập nhật tự động
+
+Mở trang chi tiết của một bài đã lưu, bật **Tự động cập nhật version**, chọn chu kỳ
+(`mỗi giờ`, `mỗi ngày`, `mỗi tuần` hoặc `mỗi tháng`), giờ chạy và các tùy chọn thông báo.
+Ứng dụng tự tạo bảng `update_schedules` và `notifications` khi khởi động. Có thể import
+thủ công [database/migrate-schedules.sql](database/migrate-schedules.sql) nếu muốn quản lý
+schema bằng migration.
+
+Khi người dùng đăng nhập và mở ứng dụng, WebShelf tự kiểm tra và chạy các lịch đã đến
+hạn ngay trong request PHP. Vì PHP web không có tiến trình nền thường trực, nếu muốn lịch
+chạy chính xác cả khi không có ai mở ứng dụng, có thể gọi worker định kỳ bởi cron hoặc
+Windows Task Scheduler. Với XAMPP, tạo task chạy mỗi phút bằng lệnh:
+
+```powershell
+C:\xampp\php\php.exe C:\xampp\htdocs\PTPMMNM-CNTT-1811-NHOM-1\bin\run-scheduler.php
+```
+
+Worker chỉ xử lý lịch đã đến hạn, tạo snapshot version mới và ghi thông báo trong mục
+**Thông báo**. Worker có thể chạy lặp lại an toàn; mỗi lịch chỉ được xử lý một lần tại
+một thời điểm nhờ khóa hàng trong database.
 
 ## 👤 Đăng nhập và tài khoản demo
 

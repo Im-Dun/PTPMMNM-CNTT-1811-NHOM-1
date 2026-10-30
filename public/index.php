@@ -137,6 +137,12 @@ elseif ($r === 'logout') {
 // KHU VUC YEU CAU DANG NHAP (AUTHENTICATED)
 else {
     $u = login_required();
+    // Chạy các lịch đến hạn ngay trong request ứng dụng, không yêu cầu người dùng
+    // tự gọi PowerShell khi đang sử dụng WebShelf.
+    run_due_schedules($pdo, $config);
+    $unread_stmt = $pdo->prepare('SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0');
+    $unread_stmt->execute([(int) $u['id']]);
+    $unread_notifications = (int) $unread_stmt->fetchColumn();
 
     // GET ASSET
     if ($r === 'asset') {
@@ -155,6 +161,49 @@ else {
         header('X-Content-Type-Options: nosniff');
         readfile($path);
         exit;
+    }
+
+    // THONG BAO
+    elseif ($r === 'notifications') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            verify_csrf();
+            $pdo->prepare('UPDATE notifications SET is_read=1 WHERE user_id=?')->execute([(int) $u['id']]);
+            header('Location: ?r=notifications');
+            exit;
+        }
+        $stmt = $pdo->prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50');
+        $stmt->execute([(int) $u['id']]);
+        $notifications = $stmt->fetchAll();
+        $title_page = 'Thông báo';
+        ob_start();
+        ?>
+        <section class="shell py-12">
+          <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+            <div><p class="eyebrow mb-2">HỆ THỐNG</p><h1 class="text-3xl font-semibold">Thông báo</h1></div>
+            <?php if ($unread_notifications > 0): ?>
+              <form method="post">
+                <input type="hidden" name="csrf" value="<?= csrf() ?>">
+                <button class="btn btn-light" type="submit">Đánh dấu đã đọc</button>
+              </form>
+            <?php endif; ?>
+          </div>
+          <div class="space-y-3">
+            <?php foreach ($notifications as $notification): ?>
+              <article class="surface p-5 <?= (int) $notification['is_read'] === 0 ? 'border-[#17565a]' : '' ?>">
+                <div class="flex items-start gap-3">
+                  <span class="text-xl"><?= $notification['type'] === 'success' ? '✓' : '!' ?></span>
+                  <div><h2 class="font-bold"><?= h($notification['title']) ?></h2>
+                    <p class="text-sm text-[#607579] mt-1"><?= h($notification['message']) ?></p>
+                    <time class="text-xs text-[#8a9b97] block mt-2"><?= h($notification['created_at']) ?></time>
+                  </div>
+                </div>
+              </article>
+            <?php endforeach; ?>
+            <?php if ($notifications === []): ?><p class="surface p-6 text-[#607579]">Chưa có thông báo.</p><?php endif; ?>
+          </div>
+        </section>
+        <?php
+        $content_page = ob_get_clean();
     }
 
     // TRANG CHU (HOME) - PHÂN TRANG BẤM SỐ & LUÔN HIỂN THỊ ĐỦ NÚT TIẾN/LÙI
@@ -658,6 +707,10 @@ else {
     elseif ($r === 'page') {
         $p = page_library($pdo, (int)$_GET['id']);
         allow($pdo, (int)$p['library_id'], ['owner', 'editor', 'viewer']);
+        $schedule_stmt = $pdo->prepare('SELECT * FROM update_schedules WHERE saved_page_id=?');
+        $schedule_stmt->execute([(int) $p['id']]);
+        $schedule = $schedule_stmt->fetch();
+        $can_schedule = in_array(role($pdo, (int) $p['library_id'], (int) $u['id']), ['owner', 'editor'], true);
         $s = $pdo->prepare('SELECT id,version_no,title,fetched_at FROM snapshots WHERE saved_page_id=? ORDER BY version_no DESC');
         $s->execute([$p['id']]);
         $versions = $s->fetchAll();
@@ -672,6 +725,49 @@ else {
           <div class="surface p-6 sm:p-8">
             <h1 class="text-3xl font-semibold mb-2"><?= h($p['title']) ?></h1>
             <p class="text-sm text-[#607579] mb-6">Nguồn: <a href="<?= h($p['source_url']) ?>" target="_blank" class="underline"><?= h($p['source_url']) ?></a></p>
+
+            <?php if ($can_schedule): ?>
+              <div class="border border-[#dae4df] rounded-xl p-5 mb-7 bg-[#f8fbfa]">
+                <div class="flex flex-wrap justify-between gap-3 items-start">
+                  <div><h2 class="font-bold text-lg">Tự động cập nhật version</h2>
+                    <p class="text-sm text-[#607579] mt-1">Worker sẽ lấy bản mới khi lịch đến hạn và tạo snapshot tiếp theo.</p></div>
+                  <?php if ($schedule): ?>
+                    <form method="post" action="?r=schedule-delete" onsubmit="return confirm('Tắt lịch cập nhật cho trang này?');">
+                      <input type="hidden" name="csrf" value="<?= csrf() ?>"><input type="hidden" name="page_id" value="<?= (int) $p['id'] ?>">
+                      <button class="btn btn-light text-red-600" type="submit">Tắt lịch</button>
+                    </form>
+                  <?php endif; ?>
+                </div>
+                <form method="post" action="?r=schedule-save" class="grid md:grid-cols-2 gap-4 mt-4">
+                  <input type="hidden" name="csrf" value="<?= csrf() ?>"><input type="hidden" name="page_id" value="<?= (int) $p['id'] ?>">
+                  <label class="text-sm font-bold">Chu kỳ
+                    <select name="frequency" class="field mt-1">
+                      <?php foreach (['hourly'=>'Mỗi giờ','daily'=>'Mỗi ngày','weekly'=>'Mỗi tuần','monthly'=>'Mỗi tháng'] as $value => $label): ?>
+                        <option value="<?= $value ?>" <?= (($schedule['frequency'] ?? 'daily') === $value) ? 'selected' : '' ?>><?= $label ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </label>
+                  <label class="text-sm font-bold">Giờ chạy
+                    <input type="time" name="run_time" class="field mt-1" value="<?= h(substr((string)($schedule['run_time'] ?? '08:00'), 0, 5)) ?>" required>
+                  </label>
+                  <label class="text-sm font-bold">Ngày trong tuần (lịch tuần)
+                    <select name="day_of_week" class="field mt-1">
+                      <?php foreach (['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'] as $day => $label): ?>
+                        <option value="<?= $day ?>" <?= ((int)($schedule['day_of_week'] ?? 1) === $day) ? 'selected' : '' ?>><?= $label ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </label>
+                  <label class="text-sm font-bold">Ngày trong tháng (lịch tháng)
+                    <input type="number" name="day_of_month" class="field mt-1" min="1" max="31" value="<?= (int)($schedule['day_of_month'] ?? 1) ?>">
+                  </label>
+                  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="notify_success" value="1" <?= (!$schedule || (int)$schedule['notify_success'] === 1) ? 'checked' : '' ?>> Thông báo khi thành công</label>
+                  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="notify_failure" value="1" <?= (!$schedule || (int)$schedule['notify_failure'] === 1) ? 'checked' : '' ?>> Thông báo khi lỗi</label>
+                  <div class="md:col-span-2"><button class="btn btn-primary" type="submit"><?= $schedule ? 'Lưu thay đổi lịch' : 'Bật lịch cập nhật' ?></button>
+                    <?php if ($schedule): ?><span class="text-sm text-[#607579] ml-3"><?= $schedule['last_status'] === 'failed' ? 'Lần gần nhất lỗi: ' . h((string)$schedule['last_error']) : 'Lần chạy kế tiếp: ' . h((string)$schedule['next_run_at']) ?></span><?php endif; ?>
+                  </div>
+                </form>
+              </div>
+            <?php endif; ?>
 
             <h2 class="text-xl font-bold mb-4">Các phiên bản snapshot (<?= count($versions) ?>)</h2>
             <div class="space-y-3">
@@ -703,6 +799,169 @@ else {
               <?php if (empty($versions)): ?>
                 <p class="text-center py-6 text-[#607579]">Trang này chưa có phiên bản snapshot nào.</p>
               <?php endif; ?>
+            </div>
+          </div>
+        </section>
+        <?php
+        $content_page = ob_get_clean();
+    }
+
+    elseif ($r === 'schedule-save' || $r === 'schedule-delete') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit('Phương thức không được hỗ trợ.'); }
+        verify_csrf();
+        $pageId = (int) ($_POST['page_id'] ?? 0);
+        $page = page_library($pdo, $pageId);
+        allow($pdo, (int) $page['library_id'], ['owner', 'editor']);
+        if ($r === 'schedule-delete') {
+            $pdo->prepare('DELETE FROM update_schedules WHERE saved_page_id=?')->execute([$pageId]);
+        } else {
+            $frequency = (string) ($_POST['frequency'] ?? 'daily');
+            if (!in_array($frequency, ['hourly', 'daily', 'weekly', 'monthly'], true)) { http_response_code(422); exit('Chu kỳ không hợp lệ.'); }
+            $runTime = (string) ($_POST['run_time'] ?? '');
+            if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $runTime)) { http_response_code(422); exit('Giờ chạy không hợp lệ.'); }
+            $scheduleData = [
+                'frequency' => $frequency, 'run_time' => $runTime . ':00',
+                'day_of_week' => max(0, min(6, (int)($_POST['day_of_week'] ?? 1))),
+                'day_of_month' => max(1, min(31, (int)($_POST['day_of_month'] ?? 1))),
+            ];
+            $nextRun = schedule_next_run($scheduleData, new DateTimeImmutable('now'));
+            $stmt = $pdo->prepare(
+                'INSERT INTO update_schedules(saved_page_id,created_by,frequency,run_time,day_of_week,day_of_month,notify_success,notify_failure,next_run_at)
+                 VALUES(?,?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE frequency=VALUES(frequency),run_time=VALUES(run_time),day_of_week=VALUES(day_of_week),day_of_month=VALUES(day_of_month),notify_success=VALUES(notify_success),notify_failure=VALUES(notify_failure),enabled=1,next_run_at=VALUES(next_run_at)'
+            );
+            $stmt->execute([$pageId, (int)$u['id'], $frequency, $scheduleData['run_time'], $scheduleData['day_of_week'], $scheduleData['day_of_month'], isset($_POST['notify_success']) ? 1 : 0, isset($_POST['notify_failure']) ? 1 : 0, $nextRun->format('Y-m-d H:i:s')]);
+        }
+        header('Location: ?r=page&id=' . $pageId);
+        exit;
+    }
+
+    // QUAN LY THANH VIEN THU VIEN
+    elseif ($r === 'members') {
+        $libraryId = (int) ($_GET['library_id'] ?? $_POST['library_id'] ?? 0);
+        $libraryStmt = $pdo->prepare(
+            'SELECT l.id,l.name,m.role FROM libraries l
+             JOIN library_members m ON m.library_id=l.id
+             WHERE l.id=? AND m.user_id=?'
+        );
+        $libraryStmt->execute([$libraryId, (int) $u['id']]);
+        $library = $libraryStmt->fetch();
+        if (!$library) {
+            http_response_code(404);
+            exit('Không tìm thấy thư viện.');
+        }
+        if ($library['role'] !== 'owner') {
+            http_response_code(403);
+            exit('Chỉ chủ thư viện mới có thể quản lý thành viên.');
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            verify_csrf();
+            $action = (string) ($_POST['action'] ?? '');
+            $memberId = (int) ($_POST['user_id'] ?? 0);
+            try {
+                if ($action === 'add') {
+                    $email = trim((string) ($_POST['email'] ?? ''));
+                    $memberRole = (string) ($_POST['role'] ?? 'viewer');
+                    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        throw new RuntimeException('Email thành viên không hợp lệ.');
+                    }
+                    if (!in_array($memberRole, ['editor', 'viewer'], true)) {
+                        throw new RuntimeException('Vai trò không hợp lệ.');
+                    }
+                    $userStmt = $pdo->prepare('SELECT id FROM users WHERE email=?');
+                    $userStmt->execute([$email]);
+                    $member = $userStmt->fetch();
+                    if (!$member) {
+                        throw new RuntimeException('Không tìm thấy tài khoản với email này.');
+                    }
+                    $pdo->prepare(
+                        'INSERT INTO library_members(library_id,user_id,role) VALUES(?,?,?)
+                         ON DUPLICATE KEY UPDATE role=VALUES(role)'
+                    )->execute([$libraryId, (int) $member['id'], $memberRole]);
+                } elseif ($action === 'role') {
+                    $memberRole = (string) ($_POST['role'] ?? '');
+                    if ($memberId === (int) $u['id'] || !in_array($memberRole, ['editor', 'viewer'], true)) {
+                        throw new RuntimeException('Không thể thay đổi vai trò owner.');
+                    }
+                    $pdo->prepare('UPDATE library_members SET role=? WHERE library_id=? AND user_id=? AND role<>?')
+                        ->execute([$memberRole, $libraryId, $memberId, 'owner']);
+                } elseif ($action === 'remove') {
+                    if ($memberId === (int) $u['id']) {
+                        throw new RuntimeException('Không thể xóa owner khỏi thư viện.');
+                    }
+                    $pdo->prepare('DELETE FROM library_members WHERE library_id=? AND user_id=? AND role<>?')
+                        ->execute([$libraryId, $memberId, 'owner']);
+                } else {
+                    throw new RuntimeException('Thao tác thành viên không hợp lệ.');
+                }
+                header('Location: ?r=members&library_id=' . $libraryId);
+                exit;
+            } catch (RuntimeException $error) {
+                $memberError = $error->getMessage();
+            }
+        }
+
+        $membersStmt = $pdo->prepare(
+            'SELECT u.id,u.name,u.email,m.role
+             FROM library_members m JOIN users u ON u.id=m.user_id
+             WHERE m.library_id=? ORDER BY FIELD(m.role,"owner","editor","viewer"),u.name'
+        );
+        $membersStmt->execute([$libraryId]);
+        $members = $membersStmt->fetchAll();
+        $title_page = 'Thành viên thư viện';
+        ob_start();
+        ?>
+        <section class="shell py-12">
+          <a href="?r=library" class="font-bold text-[#17565a] inline-flex items-center gap-2 mb-6">← Quay lại thư viện</a>
+          <div class="flex flex-wrap justify-between items-end gap-4 mb-6">
+            <div><p class="eyebrow mb-2">PHÂN QUYỀN</p><h1 class="text-3xl font-semibold"><?= h($library['name']) ?></h1></div>
+          </div>
+          <?php if (isset($memberError)): ?>
+            <p class="p-4 mb-5 rounded bg-red-100 text-red-700 text-sm font-semibold"><?= h($memberError) ?></p>
+          <?php endif; ?>
+          <div class="surface p-6 mb-6">
+            <h2 class="text-xl font-bold mb-4">Thêm thành viên</h2>
+            <form method="post" class="grid md:grid-cols-[1fr_180px_auto] gap-3 items-end">
+              <input type="hidden" name="csrf" value="<?= csrf() ?>">
+              <input type="hidden" name="library_id" value="<?= $libraryId ?>">
+              <input type="hidden" name="action" value="add">
+              <label class="text-sm font-bold">Email tài khoản
+                <input type="email" name="email" class="field mt-1" required placeholder="user@example.com">
+              </label>
+              <label class="text-sm font-bold">Vai trò
+                <select name="role" class="field mt-1"><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
+              </label>
+              <button class="btn btn-primary" type="submit">Thêm thành viên</button>
+            </form>
+          </div>
+          <div class="surface overflow-hidden">
+            <div class="p-5 border-b"><h2 class="text-xl font-bold">Danh sách thành viên (<?= count($members) ?>)</h2></div>
+            <div class="divide-y">
+              <?php foreach ($members as $member): ?>
+                <div class="p-5 flex flex-wrap items-center justify-between gap-4">
+                  <div><p class="font-bold"><?= h($member['name']) ?></p><p class="text-sm text-[#607579]"><?= h($member['email']) ?></p></div>
+                  <div class="flex items-center gap-2">
+                    <?php if ($member['role'] === 'owner'): ?>
+                      <span class="eyebrow">OWNER</span>
+                    <?php else: ?>
+                      <form method="post" class="flex items-center gap-2">
+                        <input type="hidden" name="csrf" value="<?= csrf() ?>"><input type="hidden" name="library_id" value="<?= $libraryId ?>">
+                        <input type="hidden" name="action" value="role"><input type="hidden" name="user_id" value="<?= (int) $member['id'] ?>">
+                        <select name="role" class="field !py-2 text-sm" onchange="this.form.submit()">
+                          <option value="editor" <?= $member['role'] === 'editor' ? 'selected' : '' ?>>Editor</option>
+                          <option value="viewer" <?= $member['role'] === 'viewer' ? 'selected' : '' ?>>Viewer</option>
+                        </select>
+                      </form>
+                      <form method="post" onsubmit="return confirm('Xóa thành viên này khỏi thư viện?');">
+                        <input type="hidden" name="csrf" value="<?= csrf() ?>"><input type="hidden" name="library_id" value="<?= $libraryId ?>">
+                        <input type="hidden" name="action" value="remove"><input type="hidden" name="user_id" value="<?= (int) $member['id'] ?>">
+                        <button class="btn btn-light text-red-600 !py-2 text-sm" type="submit">Xóa</button>
+                      </form>
+                    <?php endif; ?>
+                  </div>
+                </div>
+              <?php endforeach; ?>
             </div>
           </div>
         </section>
@@ -1001,6 +1260,7 @@ else {
         <a class="nav-link <?= $r === 'library' ? 'active' : '' ?>" href="?r=library">Thư viện của tôi</a>
         <a class="nav-link <?= $r === 'save' ? 'active' : '' ?>" href="?r=save">Lưu trang</a>
         <a class="nav-link <?= $r === 'search' ? 'active' : '' ?>" href="?r=search">Tìm kiếm</a>
+        <?php if (isset($u) && $u): ?><a class="nav-link <?= $r === 'notifications' ? 'active' : '' ?>" href="?r=notifications">Thông báo<?= $unread_notifications > 0 ? ' (' . $unread_notifications . ')' : '' ?></a><?php endif; ?>
       </nav>
 
       <div class="flex items-center gap-2">
@@ -1025,6 +1285,7 @@ else {
       <a href="?r=library" class="text-left py-2">Thư viện của tôi</a>
       <a href="?r=save" class="text-left py-2">Lưu trang</a>
       <a href="?r=search" class="text-left py-2">Tìm kiếm</a>
+      <?php if (isset($u) && $u): ?><a href="?r=notifications" class="text-left py-2">Thông báo<?= $unread_notifications > 0 ? ' (' . $unread_notifications . ')' : '' ?></a><?php endif; ?>
     </nav>
   </header>
 
